@@ -1,0 +1,21 @@
+{
+  "name": "NiArgus",
+  "url": "https://dashboard-three-henna-13.vercel.app",
+  "hook_attributes": {
+    "url": "https://niargus-backend-production.up.railway.app/webhook"
+  },
+  "redirect_url": "https://dashboard-three-henna-13.vercel.app/install",
+  "callback_urls": [
+    "https://niargus-backend-production.up.railway.app/auth/callback"
+  ],
+  "description": "Codebase-aware AI code review powered by Nia",
+  "public": true,
+  "default_permissions": {
+    "pull_requests": "write",
+    "contents": "read",
+    "metadata": "read"
+  },
+  "default_events": [
+    "pull_request"
+  ]
+}

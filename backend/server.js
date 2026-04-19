@@ -8,7 +8,9 @@ import { oauthRouter } from './routes/oauth.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// In production (Railway), env vars are set directly. Locally, load from ../.env
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config(); // also try .env in cwd
 
 const app = express();
 
