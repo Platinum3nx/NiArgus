@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { getInstallationClient, getPRDiff, postReview } from '../services/github.js';
+import { getInstallationClient, getPRDiff, postReview, editComment } from '../services/github.js';
 import { indexRepo, buildContextForDiff } from '../services/nia.js';
 import { generateReview } from '../services/reviewer.js';
 import {
@@ -109,11 +109,7 @@ async function handlePullRequest(body) {
     );
 
     // Edit placeholder with real review
-    await octokit.rest.issues.updateComment({
-      owner, repo,
-      comment_id: placeholderCommentId,
-      body: reviewBody,
-    });
+    await editComment(octokit, owner, repo, placeholderCommentId, reviewBody);
     console.log(`[review] Posted review on PR #${prNumber}`);
 
     // Save to DB
@@ -130,11 +126,10 @@ async function handlePullRequest(body) {
   } catch (err) {
     console.error(`[review] Error reviewing PR #${prNumber}:`, err);
     // Edit placeholder to show error
-    await octokit.rest.issues.updateComment({
-      owner, repo,
-      comment_id: placeholderCommentId,
-      body: '⚠️ **NiArgus** encountered an error reviewing this PR. The team has been notified.',
-    }).catch(() => {});
+    await editComment(
+      octokit, owner, repo, placeholderCommentId,
+      '⚠️ **NiArgus** encountered an error reviewing this PR. The team has been notified.',
+    ).catch(() => {});
   }
 }
 

@@ -4,9 +4,6 @@ const MAX_DIFF_LINES = 500;
 
 /**
  * Create an authenticated Octokit instance for a GitHub App installation.
- *
- * @param {number} installationId - The GitHub App installation ID.
- * @returns {Promise<import("@octokit/rest").Octokit>} Authenticated Octokit client.
  */
 export async function getInstallationClient(installationId) {
   const app = new App({
@@ -19,17 +16,15 @@ export async function getInstallationClient(installationId) {
 
 /**
  * Fetch the diff and metadata for a pull request.
- *
- * @param {import("@octokit/rest").Octokit} octokit
- * @param {string} owner
- * @param {string} repo
- * @param {number} prNumber
- * @returns {Promise<{title: string, author: string, body: string, files: Array<{filename: string, patch: string, status: string}>, fullDiff: string}>}
  */
 export async function getPRDiff(octokit, owner, repo, prNumber) {
   const [{ data: pr }, { data: files }] = await Promise.all([
-    octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
-    octokit.rest.pulls.listFiles({ owner, repo, pull_number: prNumber }),
+    octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+      owner, repo, pull_number: prNumber,
+    }),
+    octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", {
+      owner, repo, pull_number: prNumber,
+    }),
   ]);
 
   const truncatedFiles = files.map((file) => {
@@ -62,34 +57,32 @@ export async function getPRDiff(octokit, owner, repo, prNumber) {
 
 /**
  * Post a review comment on a pull request as an issue comment.
- *
- * @param {import("@octokit/rest").Octokit} octokit
- * @param {string} owner
- * @param {string} repo
- * @param {number} prNumber
- * @param {string} reviewBody
- * @returns {Promise<number>} The created comment ID.
  */
 export async function postReview(octokit, owner, repo, prNumber, reviewBody) {
-  const { data: comment } = await octokit.rest.issues.createComment({
-    owner,
-    repo,
-    issue_number: prNumber,
-    body: reviewBody,
-  });
-
+  const { data: comment } = await octokit.request(
+    "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+    { owner, repo, issue_number: prNumber, body: reviewBody }
+  );
   return comment.id;
 }
 
 /**
+ * Edit an existing comment.
+ */
+export async function editComment(octokit, owner, repo, commentId, body) {
+  await octokit.request(
+    "PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}",
+    { owner, repo, comment_id: commentId, body }
+  );
+}
+
+/**
  * Get the default branch name for a repository.
- *
- * @param {import("@octokit/rest").Octokit} octokit
- * @param {string} owner
- * @param {string} repo
- * @returns {Promise<string>} Default branch name (e.g. "main").
  */
 export async function getRepoDefaultBranch(octokit, owner, repo) {
-  const { data: repository } = await octokit.rest.repos.get({ owner, repo });
+  const { data: repository } = await octokit.request(
+    "GET /repos/{owner}/{repo}",
+    { owner, repo }
+  );
   return repository.default_branch;
 }
