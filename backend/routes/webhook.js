@@ -10,7 +10,9 @@ import {
   createRepo,
   updateRepoNiaSource,
   deleteRepoByGithubId,
-  saveReview,
+  reserveReviewSlot,
+  finalizeReview,
+  releaseReviewSlot,
 } from '../services/db.js';
 
 export const webhookRouter = Router();
@@ -74,16 +76,36 @@ async function handlePullRequest(body) {
     return;
   }
 
-  // Get authenticated GitHub client
-  const octokit = await getInstallationClient(installationId);
+  // Reserve a review slot (atomic check-and-insert to prevent race conditions)
+  const reservation = await reserveReviewSlot({
+    repoId: dbRepo.id,
+    prNumber,
+    installationId: dbRepo.installation_id,
+  });
 
-  // Post placeholder comment
-  const placeholderCommentId = await postReview(
-    octokit, owner, repo, prNumber,
-    '🔍 **NiArgus** is reviewing this PR...'
-  );
+  if (!reservation.allowed) {
+    console.log(`[review] Rate limited for installation ${dbRepo.installation_id}: ${reservation.reason}`);
+    const octokit = await getInstallationClient(installationId);
+    await postReview(octokit, owner, repo, prNumber,
+      `⏳ **NiArgus** — ${reservation.reason}`
+    );
+    return;
+  }
+  console.log(`[review] Slot reserved — monthly: ${reservation.monthlyUsed}/50, hourly: ${reservation.hourlyUsed}/10`);
+
+  let octokit;
+  let placeholderCommentId;
 
   try {
+    // Get authenticated GitHub client
+    octokit = await getInstallationClient(installationId);
+
+    // Post placeholder comment
+    placeholderCommentId = await postReview(
+      octokit, owner, repo, prNumber,
+      '🔍 **NiArgus** is reviewing this PR...'
+    );
+
     // Get PR diff
     const diff = await getPRDiff(octokit, owner, repo, prNumber);
     console.log(`[review] Got diff: ${diff.files.length} files changed`);
@@ -112,10 +134,8 @@ async function handlePullRequest(body) {
     await editComment(octokit, owner, repo, placeholderCommentId, reviewBody);
     console.log(`[review] Posted review on PR #${prNumber}`);
 
-    // Save to DB
-    await saveReview({
-      repoId: dbRepo.id,
-      prNumber,
+    // Finalize the reserved slot with actual review data
+    await finalizeReview(reservation.reservationId, {
       prTitle: diff.title,
       prAuthor: diff.author,
       reviewBody,
@@ -125,11 +145,15 @@ async function handlePullRequest(body) {
     });
   } catch (err) {
     console.error(`[review] Error reviewing PR #${prNumber}:`, err);
-    // Edit placeholder to show error
-    await editComment(
-      octokit, owner, repo, placeholderCommentId,
-      '⚠️ **NiArgus** encountered an error reviewing this PR. The team has been notified.',
-    ).catch(() => {});
+    // Release the reserved slot so it doesn't count toward limits
+    await releaseReviewSlot(reservation.reservationId).catch(() => {});
+    // Edit placeholder to show error (if we managed to post one)
+    if (octokit && placeholderCommentId) {
+      await editComment(
+        octokit, owner, repo, placeholderCommentId,
+        '⚠️ **NiArgus** encountered an error reviewing this PR. The team has been notified.',
+      ).catch(() => {});
+    }
   }
 }
 

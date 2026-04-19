@@ -107,11 +107,47 @@ export async function deleteRepoByGithubId(githubRepoId) {
   if (error) throw error;
 }
 
-// ── Reviews ─────────────────────────────────────────────────────────────
+// ── Reviews & Rate Limits ───────────────────────────────────────────────
+//
+// Uses a Postgres function (reserve_review_slot) for atomic rate limiting:
+// - Acquires a per-installation advisory lock inside the transaction
+// - Counts existing reviews while holding the lock
+// - Inserts a pending row only if under both limits
+// - Lock is released at transaction end
+//
+// This prevents both the "everyone slips through" and "everyone self-rejects"
+// race conditions because concurrent calls are serialized by the lock.
 
-export async function saveReview({
-  repoId,
-  prNumber,
+/**
+ * Atomically reserve a review slot via Postgres function.
+ * The function holds an advisory lock so concurrent requests are serialized.
+ */
+export async function reserveReviewSlot({ repoId, prNumber, installationId }) {
+  const { data, error } = await supabase().rpc("reserve_review_slot", {
+    p_repo_id: repoId,
+    p_pr_number: prNumber,
+    p_installation_id: installationId,
+  });
+
+  if (error) throw error;
+
+  const row = data[0];
+  if (!row.allowed) {
+    return { allowed: false, reason: row.reason };
+  }
+
+  return {
+    allowed: true,
+    reservationId: row.reservation_id,
+    monthlyUsed: Number(row.monthly_used),
+    hourlyUsed: Number(row.hourly_used),
+  };
+}
+
+/**
+ * Finalize a reserved review slot with the actual review data.
+ */
+export async function finalizeReview(reservationId, {
   prTitle,
   prAuthor,
   reviewBody,
@@ -121,9 +157,7 @@ export async function saveReview({
 }) {
   const { data, error } = await supabase()
     .from("reviews")
-    .insert({
-      repo_id: repoId,
-      pr_number: prNumber,
+    .update({
       pr_title: prTitle,
       pr_author: prAuthor,
       review_body: reviewBody,
@@ -131,11 +165,19 @@ export async function saveReview({
       context_files_used: contextFilesUsed,
       github_comment_id: githubCommentId,
     })
+    .eq("id", reservationId)
     .select()
     .single();
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Release a reserved review slot (e.g. on failure).
+ */
+export async function releaseReviewSlot(reservationId) {
+  await supabase().from("reviews").delete().eq("id", reservationId);
 }
 
 export async function getReviewsByInstallation(githubInstallationId) {
