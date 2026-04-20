@@ -2,6 +2,39 @@ import { App } from "@octokit/app";
 
 const MAX_DIFF_LINES = 500;
 
+function truncatePatch(patch = "") {
+  const lines = patch.split("\n");
+  if (lines.length <= MAX_DIFF_LINES) {
+    return patch;
+  }
+
+  return (
+    lines.slice(0, MAX_DIFF_LINES).join("\n") +
+    `\n... (truncated ${lines.length - MAX_DIFF_LINES} lines)`
+  );
+}
+
+function buildSyntheticDiff(file) {
+  const previousFilename = file.previous_filename ?? file.filename;
+  const oldPath = file.status === "added" ? "/dev/null" : previousFilename;
+  const newPath = file.status === "removed" ? "/dev/null" : file.filename;
+  const patch = truncatePatch(file.patch ?? "");
+  const header = [
+    `diff --git a/${previousFilename} b/${file.filename}`,
+  ];
+
+  if (file.previous_filename && file.previous_filename !== file.filename) {
+    header.push(`rename from ${file.previous_filename}`);
+    header.push(`rename to ${file.filename}`);
+  }
+
+  header.push(oldPath === "/dev/null" ? "--- /dev/null" : `--- a/${oldPath}`);
+  header.push(newPath === "/dev/null" ? "+++ /dev/null" : `+++ b/${newPath}`);
+  header.push(patch || "@@\nGitHub omitted the patch for this file.");
+
+  return header.join("\n");
+}
+
 /**
  * Create an authenticated Octokit instance for a GitHub App installation.
  */
@@ -18,40 +51,64 @@ export async function getInstallationClient(installationId) {
  * Fetch the diff and metadata for a pull request.
  */
 export async function getPRDiff(octokit, owner, repo, prNumber) {
-  const [{ data: pr }, { data: files }] = await Promise.all([
-    octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
-      owner, repo, pull_number: prNumber,
-    }),
-    octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", {
-      owner, repo, pull_number: prNumber,
-    }),
-  ]);
-
-  const truncatedFiles = files.map((file) => {
-    let patch = file.patch ?? "";
-    const lines = patch.split("\n");
-    if (lines.length > MAX_DIFF_LINES) {
-      patch =
-        lines.slice(0, MAX_DIFF_LINES).join("\n") +
-        `\n... (truncated ${lines.length - MAX_DIFF_LINES} lines)`;
-    }
-    return {
-      filename: file.filename,
-      patch,
-      status: file.status,
-    };
+  const prPromise = octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+    owner,
+    repo,
+    pull_number: prNumber,
   });
+  const filesPromise = octokit.paginate("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", {
+    owner,
+    repo,
+    pull_number: prNumber,
+    per_page: 100,
+  });
+  const [{ data: pr }, files] = await Promise.all([prPromise, filesPromise]);
 
-  const fullDiff = truncatedFiles
-    .map((f) => `--- ${f.filename} (${f.status})\n${f.patch}`)
-    .join("\n\n");
+  const truncatedFiles = files.map((file) => ({
+    filename: file.filename,
+    previous_filename: file.previous_filename ?? null,
+    patch: truncatePatch(file.patch ?? ""),
+    status: file.status,
+  }));
+
+  const fullDiff = truncatedFiles.map(buildSyntheticDiff).join("\n\n");
 
   return {
     title: pr.title,
     author: pr.user?.login ?? "unknown",
     body: pr.body ?? "",
+    headSha: pr.head?.sha ?? null,
+    state: pr.state,
     files: truncatedFiles,
     fullDiff,
+  };
+}
+
+/**
+ * Find an existing issue comment for a PR by an embedded marker string.
+ */
+export async function findCommentByMarker(octokit, owner, repo, prNumber, marker) {
+  const comments = await octokit.paginate(
+    "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+    {
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    }
+  );
+
+  const match = comments.find(
+    (comment) => typeof comment.body === "string" && comment.body.includes(marker)
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    id: match.id,
+    body: match.body ?? "",
   };
 }
 

@@ -250,6 +250,31 @@ export async function buildContextForDiff(sourceId, diff) {
 // Diff Parsing
 // ---------------------------------------------------------------------------
 
+function normalizeDiffPath(rawPath) {
+  if (!rawPath) return null;
+
+  let path = rawPath.trim().split("\t", 1)[0].trim();
+  path = path.replace(/^"(.*)"$/, "$1");
+  path = path.replace(/\s+\([^)]+\)$/, "");
+
+  if (path === "/dev/null") {
+    return null;
+  }
+
+  if (path.startsWith("a/") || path.startsWith("b/")) {
+    path = path.slice(2);
+  }
+
+  return path || null;
+}
+
+function addDiffPath(filePaths, rawPath) {
+  const normalized = normalizeDiffPath(rawPath);
+  if (normalized) {
+    filePaths.add(normalized);
+  }
+}
+
 /**
  * Parse a unified diff to extract changed file paths and meaningful
  * identifiers (function names, class names, variable names, imports).
@@ -261,11 +286,24 @@ function parseDiff(diff) {
   const lines = diff.split('\n');
 
   for (const line of lines) {
+    const gitDiffMatch = line.match(/^diff --git "?a\/(.+?)"? "?b\/(.+?)"?$/);
+    if (gitDiffMatch) {
+      addDiffPath(filePaths, gitDiffMatch[1]);
+      addDiffPath(filePaths, gitDiffMatch[2]);
+      continue;
+    }
+
+    const renameMatch = line.match(/^rename (?:from|to)\s+(.+)$/);
+    if (renameMatch) {
+      addDiffPath(filePaths, renameMatch[1]);
+      continue;
+    }
+
     // Extract file paths from diff headers.
     // Matches: +++ b/path/to/file.js or --- a/path/to/file.js
-    const fileMatch = line.match(/^(?:\+\+\+|---)\s+[ab]\/(.+)/);
+    const fileMatch = line.match(/^(?:\+\+\+|---)\s+(.+)/);
     if (fileMatch) {
-      filePaths.add(fileMatch[1]);
+      addDiffPath(filePaths, fileMatch[1]);
       continue;
     }
 
