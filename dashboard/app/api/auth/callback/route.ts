@@ -1,27 +1,72 @@
-import { cookies } from "next/headers";
-import { createSession } from "@/lib/auth";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  OAUTH_STATE_COOKIE_NAME,
+  SESSION_COOKIE_NAME,
+  createSession,
+  oauthStateCookieOptions,
+  sanitizeReturnTo,
+  sessionCookieOptions,
+  verifyOAuthResultToken,
+  verifyOAuthState,
+} from "@/lib/auth";
+
+function buildFailedAuthResponse(request: NextRequest, returnTo?: string | null) {
+  const target = sanitizeReturnTo(returnTo).startsWith("/dashboard")
+    ? "/"
+    : sanitizeReturnTo(returnTo);
+  const response = NextResponse.redirect(new URL(target, request.url));
+
+  response.cookies.set(SESSION_COOKIE_NAME, "", {
+    ...sessionCookieOptions,
+    maxAge: 0,
+  });
+  response.cookies.set(OAUTH_STATE_COOKIE_NAME, "", {
+    ...oauthStateCookieOptions,
+    maxAge: 0,
+  });
+
+  return response;
+}
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
-  const login = params.get("login");
-  const avatar = params.get("avatar") || "";
-  const token = params.get("token");
+  const state = params.get("state");
+  const auth = params.get("auth");
+  const error = params.get("error");
+  const storedState = request.cookies.get(OAUTH_STATE_COOKIE_NAME)?.value;
 
-  if (!login || !token) {
-    return new Response("Missing login or token", { status: 400 });
+  if (!state || !storedState || storedState !== state) {
+    return buildFailedAuthResponse(request);
   }
 
-  const jwt = await createSession({ login, avatar, token });
+  const parsedState = verifyOAuthState(state);
+  if (!parsedState) {
+    return buildFailedAuthResponse(request);
+  }
 
-  const cookieStore = await cookies();
-  cookieStore.set("niargus_session", jwt, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-    path: "/",
+  if (error || !auth) {
+    return buildFailedAuthResponse(request, parsedState.returnTo);
+  }
+
+  const authPayload = verifyOAuthResultToken(auth);
+  if (!authPayload || !authPayload.login) {
+    return buildFailedAuthResponse(request, parsedState.returnTo);
+  }
+
+  const jwt = await createSession({
+    login: authPayload.login,
+    avatar: authPayload.avatar || "",
+    installationIds: authPayload.installationIds,
   });
 
-  return Response.redirect(new URL("/dashboard", request.url));
+  const response = NextResponse.redirect(
+    new URL(parsedState.returnTo, request.url)
+  );
+  response.cookies.set(SESSION_COOKIE_NAME, jwt, sessionCookieOptions);
+  response.cookies.set(OAUTH_STATE_COOKIE_NAME, "", {
+    ...oauthStateCookieOptions,
+    maxAge: 0,
+  });
+
+  return response;
 }

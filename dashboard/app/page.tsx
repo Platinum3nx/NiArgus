@@ -1,7 +1,11 @@
 import Link from "next/link";
+import { getSession } from "@/lib/auth";
 
 const GITHUB_APP_SLUG = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG || "niargus-review";
 const INSTALL_URL = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
+const DASHBOARD_LOGIN_URL = `/api/auth/login?returnTo=${encodeURIComponent(
+  "/dashboard"
+)}`;
 
 const features = [
   {
@@ -24,7 +28,9 @@ const features = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const session = await getSession();
+
   return (
     <main className="flex flex-col items-center">
       {/* Hero */}
@@ -41,19 +47,27 @@ export default function LandingPage() {
           just the diff. It finds conflicts with existing patterns, duplicated
           logic, and real issues.
         </p>
-        <Link
-          href={INSTALL_URL}
-          className="mt-10 inline-flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-8 py-3.5 text-lg transition-colors"
-        >
-          Install on GitHub
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </Link>
+        <div className="mt-10 flex flex-col sm:flex-row items-center gap-4">
+          <Link
+            href={INSTALL_URL}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-8 py-3.5 text-lg transition-colors"
+          >
+            Install on GitHub
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </Link>
+          <Link
+            href={session ? "/dashboard" : DASHBOARD_LOGIN_URL}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-8 py-3.5 text-lg font-semibold text-zinc-100 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+          >
+            {session ? "Open Dashboard" : "Sign in with GitHub"}
+          </Link>
+        </div>
       </section>
 
       {/* Example review */}
