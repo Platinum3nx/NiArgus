@@ -31,12 +31,15 @@ const installationRetryTimers = new Map();
 
 export const webhookRouter = Router();
 
+const NIARGUS_PR_MARKER = '<!-- niargus-pr-review -->';
+const ERROR_MESSAGE = "⚠️ **NiArgus** encountered an issue reviewing this PR. We'll automatically retry when you push a new commit.";
+
 function reviewMarker(reviewId) {
   return `<!-- niargus-review-job:${reviewId} -->`;
 }
 
 function withReviewMarker(reviewId, body) {
-  return `${reviewMarker(reviewId)}\n${body}`;
+  return `${NIARGUS_PR_MARKER}\n${reviewMarker(reviewId)}\n${body}`;
 }
 
 function shortSha(sha) {
@@ -169,15 +172,27 @@ webhookRouter.post('/', async (req, res) => {
 // ── Review queue helpers ────────────────────────────────────────────────
 
 async function ensureReviewComment(job, octokit, owner, repo) {
-  const marker = reviewMarker(job.reviewId);
   let commentId = job.githubCommentId;
 
   if (!commentId) {
-    const existing = await findCommentByMarker(octokit, owner, repo, job.prNumber, marker);
-    if (existing) {
-      commentId = existing.id;
-      await setReviewCommentId(job.reviewId, commentId);
+    // First try the job-specific marker (for in-progress restarts)
+    const byJob = await findCommentByMarker(octokit, owner, repo, job.prNumber, reviewMarker(job.reviewId));
+    if (byJob) {
+      commentId = byJob.id;
     }
+  }
+
+  if (!commentId) {
+    // Then try the PR-level marker (reuse existing NiArgus comment from a previous/failed job)
+    const byPr = await findCommentByMarker(octokit, owner, repo, job.prNumber, NIARGUS_PR_MARKER);
+    if (byPr) {
+      commentId = byPr.id;
+      console.log(`[review] Reusing existing NiArgus comment ${commentId} on PR #${job.prNumber}`);
+    }
+  }
+
+  if (commentId) {
+    await setReviewCommentId(job.reviewId, commentId);
   }
 
   const placeholderBody = withReviewMarker(
@@ -371,7 +386,7 @@ async function processReviewJob(job) {
       commentId,
       retrying
         ? '⚠️ **NiArgus** hit a temporary error while reviewing this PR. It will retry shortly.'
-        : '⚠️ **NiArgus** encountered an error reviewing this PR after multiple attempts.'
+        : ERROR_MESSAGE
     ).catch(() => {});
   }
 }

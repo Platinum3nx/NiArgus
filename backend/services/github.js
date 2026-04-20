@@ -56,13 +56,13 @@ export async function getPRDiff(octokit, owner, repo, prNumber) {
     repo,
     pull_number: prNumber,
   });
-  const filesPromise = octokit.paginate("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", {
+  const filesPromise = octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", {
     owner,
     repo,
     pull_number: prNumber,
     per_page: 100,
   });
-  const [{ data: pr }, files] = await Promise.all([prPromise, filesPromise]);
+  const [{ data: pr }, { data: files }] = await Promise.all([prPromise, filesPromise]);
 
   const truncatedFiles = files.map((file) => ({
     filename: file.filename,
@@ -88,28 +88,27 @@ export async function getPRDiff(octokit, owner, repo, prNumber) {
  * Find an existing issue comment for a PR by an embedded marker string.
  */
 export async function findCommentByMarker(octokit, owner, repo, prNumber, marker) {
-  const comments = await octokit.paginate(
-    "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
-    {
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: 100,
+  // Fetch comments page by page (octokit from getInstallationOctokit has no .paginate)
+  let page = 1;
+  while (true) {
+    const { data: comments } = await octokit.request(
+      "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+      { owner, repo, issue_number: prNumber, per_page: 100, page }
+    );
+
+    const match = comments.find(
+      (comment) => typeof comment.body === "string" && comment.body.includes(marker)
+    );
+
+    if (match) {
+      return { id: match.id, body: match.body ?? "" };
     }
-  );
 
-  const match = comments.find(
-    (comment) => typeof comment.body === "string" && comment.body.includes(marker)
-  );
-
-  if (!match) {
-    return null;
+    if (comments.length < 100) break;
+    page++;
   }
 
-  return {
-    id: match.id,
-    body: match.body ?? "",
-  };
+  return null;
 }
 
 /**
