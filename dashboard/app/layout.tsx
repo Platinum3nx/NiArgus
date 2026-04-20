@@ -11,6 +11,12 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "NiArgus — AI Code Review",
   description: "Code review that actually read your codebase",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+  },
 };
 
 export default function RootLayout({
