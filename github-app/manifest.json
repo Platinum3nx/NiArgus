@@ -1,10 +1,10 @@
 {
   "name": "NiArgus",
-  "url": "https://dashboard-three-henna-13.vercel.app",
+  "url": "https://niargus.dev",
   "hook_attributes": {
     "url": "https://niargus-backend-production.up.railway.app/webhook"
   },
-  "redirect_url": "https://dashboard-three-henna-13.vercel.app/install",
+  "redirect_url": "https://niargus.dev/install",
   "callback_urls": [
     "https://niargus-backend-production.up.railway.app/auth/callback"
   ],
