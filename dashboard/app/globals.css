@@ -9,7 +9,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-plex-mono);
-  --font-mono: var(--font-plex-mono-alt);
+  --font-mono: var(--font-plex-mono);
 }
 
 html {
@@ -27,6 +27,6 @@ body {
 }
 
 ::selection {
-  background: rgba(255, 103, 40, 0.24);
+  background: rgba(255, 103, 40, 0.22);
   color: var(--foreground);
 }

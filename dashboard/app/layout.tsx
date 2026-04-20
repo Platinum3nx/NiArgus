@@ -8,12 +8,6 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600"],
 });
 
-const plexMonoAlt = IBM_Plex_Mono({
-  variable: "--font-plex-mono-alt",
-  subsets: ["latin"],
-  weight: ["400"],
-});
-
 export const metadata: Metadata = {
   title: "NiArgus — AI Code Review",
   description: "Code review that actually read your codebase",
@@ -25,10 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${plexMono.variable} ${plexMonoAlt.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${plexMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-[#171717] text-[#f5f1e8]">
         {children}
       </body>
