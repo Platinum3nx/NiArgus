@@ -1,11 +1,6 @@
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
-
 const GITHUB_APP_SLUG = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG || "niargus-review";
 const INSTALL_URL = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
-const DASHBOARD_LOGIN_URL = `/api/auth/login?returnTo=${encodeURIComponent(
-  "/dashboard"
-)}`;
 
 const features = [
   {
@@ -28,9 +23,7 @@ const features = [
   },
 ];
 
-export default async function LandingPage() {
-  const session = await getSession();
-
+export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[#171717] text-[#f5f1e8]">
       <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-12 lg:py-10">
@@ -63,7 +56,7 @@ export default async function LandingPage() {
                   reviewing PRs — not just the diff. It finds conflicts with
                   existing patterns, duplicated logic, and real issues.
                 </p>
-                <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+                <div className="mt-12">
                   <Link
                     href={INSTALL_URL}
                     className="inline-flex items-center gap-3 rounded-[16px] border border-[#3c3c3c] bg-[#222222] px-7 py-4 text-[17px] font-medium text-[#f5f1e8] transition-colors hover:border-[#575757] hover:bg-[#2a2a2a]"
@@ -76,12 +69,6 @@ export default async function LandingPage() {
                         clipRule="evenodd"
                       />
                     </svg>
-                  </Link>
-                  <Link
-                    href={session ? "/dashboard" : DASHBOARD_LOGIN_URL}
-                    className="inline-flex items-center gap-2 rounded-[16px] border border-[#343434] bg-transparent px-7 py-4 text-[17px] font-medium text-[#cfc9bf] transition-colors hover:border-[#515151] hover:bg-[#202020] hover:text-[#f4efe7]"
-                  >
-                    {session ? "Open Dashboard" : "Sign in with GitHub"}
                   </Link>
                 </div>
               </div>
