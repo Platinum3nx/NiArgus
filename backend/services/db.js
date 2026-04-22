@@ -5,11 +5,27 @@ const MAX_REVIEW_ATTEMPTS = 3;
 
 let _supabase;
 
+function requireEnv(name) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
 export function supabase() {
   if (!_supabase) {
     _supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
+      requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
     );
   }
   return _supabase;

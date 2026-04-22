@@ -109,7 +109,6 @@ ANTHROPIC_API_KEY=
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
 # Set these after Railway and Vercel deploy
@@ -180,9 +179,7 @@ create table installations (
   created_at timestamptz default now(),
   github_installation_id bigint unique not null,
   github_account_login text not null,
-  github_account_type text not null, -- 'User' or 'Organization'
-  access_token text,
-  token_expires_at timestamptz
+  github_account_type text not null -- 'User' or 'Organization'
 );
 
 -- Repos: tracks which repos are enabled and their Nia source ID
@@ -657,7 +654,6 @@ Vercel will give you a URL like `https://niargus.vercel.app`. Copy it.
 Set env vars:
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_URL
-vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
 vercel env add GITHUB_CLIENT_ID
 vercel env add GITHUB_CLIENT_SECRET
 vercel env add NEXT_PUBLIC_APP_URL    # paste your Vercel URL here
